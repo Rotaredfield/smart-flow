@@ -11,16 +11,25 @@ type GenMode = 'rack' | 'business';
 interface GeminiAdvisorProps {
   isDark: boolean;
   onThemeChange: (isDark: boolean) => void;
+  onImportComplete?: () => void;
+  externalSetNodes?: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void;
+  externalSetEdges?: (edges: Edge[] | ((edges: Edge[]) => Edge[])) => void;
 }
 
-const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ isDark, onThemeChange }) => {
-  // Destructure getEdges here at the top level to avoid "Invalid Hook Call" error
+const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ 
+    isDark, 
+    onThemeChange, 
+    onImportComplete,
+    externalSetNodes,
+    externalSetEdges
+}) => {
   const { getNodes, setNodes, setEdges, getEdges } = useReactFlow();
   
   // State
   const [mode, setMode] = useState<Mode>('idle');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showDataMenu, setShowDataMenu] = useState(false);
   
   // Generation Options
@@ -73,22 +82,75 @@ const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ isDark, onThemeChange }) 
               const content = e.target?.result as string;
               const data = JSON.parse(content);
               
-              // Support both legacy (array of nodes) and new (object with nodes/edges) formats
+              let nodesToImport: Node[] = [];
+              let edgesToImport: Edge[] = [];
+              
               if (Array.isArray(data)) {
-                  setNodes(data);
-                  setEdges([]);
+                  nodesToImport = data;
+                  edgesToImport = [];
               } else if (data.nodes) {
-                  setNodes(data.nodes);
-                  setEdges(data.edges || []);
+                  nodesToImport = data.nodes;
+                  edgesToImport = data.edges || [];
+              } else {
+                  throw new Error("Invalid JSON format");
               }
+
+              if (nodesToImport.length === 0) {
+                  setError("导入的文件不包含任何节点数据。");
+                  return;
+              }
+
+              const cleanedNodes = nodesToImport.map(node => {
+                  const { positionAbsolute, selected, dragging, ...rest } = node as any;
+                  return rest;
+              });
+
+              const cleanedEdges = edgesToImport.map(edge => {
+                  const { selected, ...rest } = edge as any;
+                  return rest;
+              });
+
+              console.log('导入的节点数据:', cleanedNodes);
+              console.log('导入的边数据:', cleanedEdges);
+
+              const sortedNodes = cleanedNodes.sort((a, b) => {
+                  const aDepth = getNodeDepth(a, cleanedNodes);
+                  const bDepth = getNodeDepth(b, cleanedNodes);
+                  return aDepth - bDepth;
+              });
+
+              const nodeSetter = externalSetNodes || setNodes;
+              const edgeSetter = externalSetEdges || setEdges;
+
+              console.log('使用 setter:', externalSetNodes ? 'external' : 'internal');
+
+              nodeSetter(sortedNodes);
+              edgeSetter(cleanedEdges);
+
+              console.log('节点已设置，等待渲染...');
+              console.log('sortedNodes:', sortedNodes);
+
+              if (onImportComplete) {
+                  onImportComplete();
+              }
+
+              setSuccess(`成功导入 ${sortedNodes.length} 个节点和 ${cleanedEdges.length} 条边`);
+              setTimeout(() => setSuccess(null), 3000);
+              
           } catch (err) {
               console.error("Import failed", err);
-              setError("Failed to import JSON file.");
+              setError("导入失败：JSON 文件格式不正确。");
           }
       };
       reader.readAsText(file);
-      // Reset input
       event.target.value = '';
+  };
+
+  const getNodeDepth = (node: Node, allNodes: Node[]): number => {
+      if (!node.parentId) return 0;
+      const parent = allNodes.find(n => n.id === node.parentId);
+      if (!parent) return 0;
+      return 1 + getNodeDepth(parent, allNodes);
   };
 
   const handleAnalyze = async () => {
@@ -311,7 +373,26 @@ const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ isDark, onThemeChange }) 
   
   if (mode === 'idle') {
       return (
-        <Panel position="top-right" className="mr-4 mt-4 flex gap-3 items-center"> 
+        <Panel position="top-right" className="mr-4 mt-4 flex gap-3 items-center">
+            {/* Success Toast */}
+            {success && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] bg-emerald-100 dark:bg-emerald-900/90 border border-emerald-200 dark:border-emerald-500/30 px-4 py-2 rounded-lg shadow-xl text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-5 duration-300">
+                    <i className="fa-solid fa-circle-check"></i>
+                    {success}
+                </div>
+            )}
+            
+            {/* Error Toast */}
+            {error && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] bg-red-100 dark:bg-red-900/90 border border-red-200 dark:border-red-500/30 px-4 py-2 rounded-lg shadow-xl text-red-700 dark:text-red-300 text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-5 duration-300">
+                    <i className="fa-solid fa-circle-exclamation"></i>
+                    {error}
+                    <button onClick={() => setError(null)} className="ml-2 hover:text-red-900 dark:hover:text-red-100">
+                        <i className="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            )}
+        
             <div className="flex gap-2">
                 {/* Data Manager Dropdown */}
                 <div className="relative">
@@ -338,16 +419,16 @@ const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ isDark, onThemeChange }) 
                             >
                                 <i className="fa-solid fa-file-import text-slate-400"></i> 导入 JSON
                             </button>
-                            {/* Hidden File Input */}
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                onChange={handleFileChange} 
-                                accept=".json" 
-                                className="hidden" 
-                            />
                         </div>
                     )}
+                    {/* Hidden File Input - Always rendered outside the conditional menu */}
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileChange} 
+                        accept=".json" 
+                        className="hidden" 
+                    />
                 </div>
 
                 {/* Overlay to close menu when clicking outside */}
@@ -433,6 +514,11 @@ const GeminiAdvisor: React.FC<GeminiAdvisorProps> = ({ isDark, onThemeChange }) 
                 <div className="bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 p-3 rounded text-red-600 dark:text-red-300 text-xs break-all">
                     <i className="fa-solid fa-circle-exclamation mr-2"></i>
                     {error}
+                </div>
+            ) : success ? (
+                <div className="bg-emerald-100 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-500/30 p-3 rounded text-emerald-600 dark:text-emerald-300 text-xs break-all">
+                    <i className="fa-solid fa-circle-check mr-2"></i>
+                    {success}
                 </div>
             ) : mode === 'analyzing' && report ? (
                 // --- ANALYSIS REPORT VIEW ---

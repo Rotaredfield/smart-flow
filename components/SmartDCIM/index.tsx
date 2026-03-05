@@ -152,7 +152,7 @@ const DCIMCanvas = () => {
   const dragStartNodeRef = useRef<Node | null>(null);
 
   // Use ReactFlow hook for internal state access
-  const { project, getNodes } = useReactFlow();
+  const { project, getNodes, fitView } = useReactFlow();
 
   // Context Menu State
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
@@ -164,6 +164,21 @@ const DCIMCanvas = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMatches, setSearchMatches] = useState<Node[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+
+  // Import callback
+  const handleImportComplete = useCallback(() => {
+      setTimeout(() => {
+          const currentNodes = getNodes();
+          if (currentNodes.length > 0) {
+              fitView({ 
+                  padding: 0.3, 
+                  duration: 800,
+                  maxZoom: 1,
+                  minZoom: 0.1
+              });
+          }
+      }, 100);
+  }, [getNodes, fitView]);
 
   // Theme Toggle Effect
   useEffect(() => {
@@ -973,7 +988,13 @@ const DCIMCanvas = () => {
           />
           
           <VisibilityControls />
-          <GeminiAdvisor isDark={isDark} onThemeChange={setIsDark} />
+          <GeminiAdvisor 
+              isDark={isDark} 
+              onThemeChange={setIsDark} 
+              onImportComplete={handleImportComplete}
+              externalSetNodes={setNodes}
+              externalSetEdges={setEdges}
+          />
 
           {/* Type Highlighter Panel */}
           {activeType && selectedNode && (
