@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        DOCKERHUB_MIRROR: ${DOCKERHUB_MIRROR:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATA_FILE: /data/dcim-layout.json
+      DEFAULT_VIEW_ID: default
+    volumes:
+      - dcim_layout_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        DOCKERHUB_MIRROR: ${DOCKERHUB_MIRROR:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io}
+        VITE_API_BASE: /api
+    ports:
+      - "1919:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  dcim_layout_data:

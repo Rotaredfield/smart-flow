@@ -1,11 +1,12 @@
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
   useNodesState,
   useEdgesState,
   Controls,
+  ControlButton,
   Background,
   Connection,
   Edge,
@@ -33,7 +34,8 @@ import EdgeDetailsPanel from './EdgeDetailsPanel';
 import ContextMenu from './ContextMenu';
 import VisibilityControls from './VisibilityControls';
 import { DragItem, ItemType, ServerData } from './types';
-import { PX_PER_U, RACK_PADDING_PX, RACK_WIDTH_PX, SERVER_WIDTH_PX, RACK_HEADER_HEIGHT_PX, UDF_WIDTH_PX, UDF_HEIGHT_PX, DEFAULT_FIBER_PORTS, DEFAULT_NETWORK_PORTS } from './constants';
+import { PX_PER_U, RACK_PADDING_PX, RACK_WIDTH_PX, SERVER_WIDTH_PX, RACK_TWO_COLUMN_GAP_PX, TOWER_SERVER_WIDTH_PX, RACK_HEADER_HEIGHT_PX, UDF_WIDTH_PX, UDF_HEIGHT_PX, DEFAULT_FIBER_PORTS, DEFAULT_NETWORK_PORTS, DEFAULT_TOWER_SERVER_U } from './constants';
+import { DEFAULT_VIEW_ID, loadLayout, saveLayout } from './services/layoutPersistenceService';
 
 // --- Error Suppression Logic (Moved from root index.tsx) ---
 const resizeErrorMessages = [
@@ -67,6 +69,7 @@ const nodeTypes = {
   rack: RackNode,
   placeholder: RackNode,
   server: ServerNode,
+  tower_server: ServerNode,
   network: ServerNode,
   storage: ServerNode,
   firewall: ServerNode,
@@ -84,6 +87,17 @@ const edgeTypes = {
 const Z_INDEX_ZONE = -10;
 const Z_INDEX_RACK = 0;
 const Z_INDEX_DEVICE = 1000;
+const AUTOSAVE_DELAY_MS = 700;
+const HISTORY_LIMIT = 100;
+const HISTORY_GROUP_DELAY_MS = 250;
+const TRANSIENT_NODE_DATA_FIELDS = [
+  'isMatchedType',
+  'isDropTarget',
+  'previewUPosition',
+  'previewUHeight',
+  'isSearchMatch',
+  'isCurrentSearchMatch'
+];
 
 let id = 0;
 const getId = () => `dnd_${id++}_${Date.now()}`;
@@ -127,6 +141,53 @@ const checkCollision = (rect1: any, rect2: any) => {
     );
 };
 
+const getTowerColumnX = (column: number) =>
+  RACK_PADDING_PX + column * (TOWER_SERVER_WIDTH_PX + RACK_TWO_COLUMN_GAP_PX);
+
+const getTowerColumnForRackDrop = (nodeAbsX: number, rackAbsX: number) => {
+  const nodeCenterX = nodeAbsX + (TOWER_SERVER_WIDTH_PX / 2);
+  const splitLineX = rackAbsX + RACK_PADDING_PX + TOWER_SERVER_WIDTH_PX + (RACK_TWO_COLUMN_GAP_PX / 2);
+  return nodeCenterX >= splitLineX ? 1 : 0;
+};
+
+const getTowerColumnFromRackChild = (node: Node) => {
+  const rightColumnStart = getTowerColumnX(1);
+  const nodeX = typeof node.position?.x === 'number' ? node.position.x : RACK_PADDING_PX;
+  return nodeX >= rightColumnStart - 1 ? 1 : 0;
+};
+
+const sanitizeNodesForPersistence = (nodes: Node[]) =>
+  nodes.map((node) => {
+    const nextNode = { ...node, selected: false, dragging: false };
+    if (node.data && typeof node.data === 'object' && !Array.isArray(node.data)) {
+      const nextData = { ...(node.data as Record<string, unknown>) };
+      TRANSIENT_NODE_DATA_FIELDS.forEach((field) => {
+        delete nextData[field];
+      });
+      return { ...nextNode, data: nextData };
+    }
+    return nextNode;
+  });
+
+const sanitizeEdgesForPersistence = (edges: Edge[]) =>
+  edges.map((edge) => ({ ...edge, selected: false }));
+
+const serializeLayoutSnapshot = (nodes: Node[], edges: Edge[]) =>
+  JSON.stringify({
+    nodes: sanitizeNodesForPersistence(nodes),
+    edges: sanitizeEdgesForPersistence(edges),
+  });
+
+const isTextEditingTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+    return true;
+  }
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest('[contenteditable="true"]'));
+};
+
 const DCIMCanvas = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -150,6 +211,15 @@ const DCIMCanvas = () => {
 
   // Drag State for Revert
   const dragStartNodeRef = useRef<Node | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const lastPersistedSnapshotRef = useRef<string>('');
+  const historyCommitTimeoutRef = useRef<number | null>(null);
+  const undoStackRef = useRef<string[]>([]);
+  const currentHistorySnapshotRef = useRef<string>('');
+  const pendingHistoryBaseRef = useRef<string | null>(null);
+  const pendingHistoryNextRef = useRef<string | null>(null);
+  const isApplyingHistoryRef = useRef(false);
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
 
   // Use ReactFlow hook for internal state access
   const { project, getNodes, fitView } = useReactFlow();
@@ -165,6 +235,30 @@ const DCIMCanvas = () => {
   const [searchMatches, setSearchMatches] = useState<Node[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
 
+  const visibleEdges = useMemo(() => {
+    if (selectedNode) {
+      return edges.filter(
+        (edge) => edge.source === selectedNode.id || edge.target === selectedNode.id
+      );
+    }
+    if (selectedEdge) {
+      return edges.filter((edge) => edge.id === selectedEdge.id);
+    }
+    return [];
+  }, [edges, selectedEdge, selectedNode]);
+
+  useEffect(() => {
+    if (!selectedEdge) return;
+    const latestSelectedEdge = edges.find((edge) => edge.id === selectedEdge.id);
+    if (!latestSelectedEdge) {
+      setSelectedEdge(null);
+      return;
+    }
+    if (latestSelectedEdge !== selectedEdge) {
+      setSelectedEdge(latestSelectedEdge);
+    }
+  }, [edges, selectedEdge]);
+
   // Import callback
   const handleImportComplete = useCallback(() => {
       setTimeout(() => {
@@ -179,6 +273,168 @@ const DCIMCanvas = () => {
           }
       }, 100);
   }, [getNodes, fitView]);
+
+  const flushPendingHistoryEntry = useCallback(() => {
+    if (historyCommitTimeoutRef.current !== null) {
+      window.clearTimeout(historyCommitTimeoutRef.current);
+      historyCommitTimeoutRef.current = null;
+    }
+
+    const baseSnapshot = pendingHistoryBaseRef.current;
+    const nextSnapshot = pendingHistoryNextRef.current;
+
+    if (baseSnapshot && nextSnapshot && baseSnapshot !== nextSnapshot) {
+      undoStackRef.current.push(baseSnapshot);
+      if (undoStackRef.current.length > HISTORY_LIMIT) {
+        undoStackRef.current.splice(0, undoStackRef.current.length - HISTORY_LIMIT);
+      }
+    }
+
+    pendingHistoryBaseRef.current = null;
+    pendingHistoryNextRef.current = null;
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!isLayoutReady) return;
+
+    flushPendingHistoryEntry();
+
+    const previousSnapshot = undoStackRef.current.pop();
+    if (!previousSnapshot) return;
+
+    try {
+      const parsed = JSON.parse(previousSnapshot) as { nodes: Node[]; edges: Edge[] };
+      isApplyingHistoryRef.current = true;
+      currentHistorySnapshotRef.current = previousSnapshot;
+      pendingHistoryBaseRef.current = null;
+      pendingHistoryNextRef.current = null;
+      setNodes(parsed.nodes);
+      setEdges(parsed.edges);
+      setSelectedNode(null);
+      setSelectedEdge(null);
+      setMenu(null);
+      setIsEditingNode(false);
+      setTargetRackId(null);
+    } catch (error) {
+      console.error('Failed to restore undo snapshot:', error);
+    }
+  }, [flushPendingHistoryEntry, isLayoutReady, setEdges, setNodes]);
+
+  // Load persisted layout once on boot.
+  useEffect(() => {
+    let isCancelled = false;
+
+    const initializeLayout = async () => {
+      try {
+        const persistedLayout = await loadLayout(DEFAULT_VIEW_ID);
+        if (isCancelled) return;
+
+        const loadedNodes = Array.isArray(persistedLayout.nodes) ? persistedLayout.nodes : [];
+        const loadedEdges = Array.isArray(persistedLayout.edges) ? persistedLayout.edges : [];
+
+        setNodes(loadedNodes);
+        setEdges(loadedEdges);
+
+        const initialSnapshot = serializeLayoutSnapshot(loadedNodes, loadedEdges);
+        lastPersistedSnapshotRef.current = initialSnapshot;
+        currentHistorySnapshotRef.current = initialSnapshot;
+        undoStackRef.current = [];
+        pendingHistoryBaseRef.current = null;
+        pendingHistoryNextRef.current = null;
+      } catch (error) {
+        console.error('Failed to load persisted DCIM layout:', error);
+      } finally {
+        if (!isCancelled) {
+          setIsLayoutReady(true);
+        }
+      }
+    };
+
+    initializeLayout();
+
+    return () => {
+      isCancelled = true;
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (historyCommitTimeoutRef.current !== null) {
+        window.clearTimeout(historyCommitTimeoutRef.current);
+        historyCommitTimeoutRef.current = null;
+      }
+    };
+  }, [setEdges, setNodes]);
+
+  // Keep layout in persistent storage whenever nodes/edges change.
+  useEffect(() => {
+    if (!isLayoutReady) return;
+
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      const layoutToPersist = {
+        nodes: sanitizeNodesForPersistence(nodes),
+        edges: sanitizeEdgesForPersistence(edges),
+      };
+      const serializedLayout = JSON.stringify(layoutToPersist);
+
+      if (serializedLayout === lastPersistedSnapshotRef.current) return;
+
+      saveLayout(layoutToPersist, DEFAULT_VIEW_ID)
+        .then(() => {
+          lastPersistedSnapshotRef.current = serializedLayout;
+        })
+        .catch((error) => {
+          console.error('Failed to persist DCIM layout:', error);
+        });
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => {
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [nodes, edges, isLayoutReady]);
+
+  // Track undo history based on sanitized snapshots so transient highlight state is ignored.
+  useEffect(() => {
+    if (!isLayoutReady) return;
+
+    const serializedSnapshot = serializeLayoutSnapshot(nodes, edges);
+
+    if (!currentHistorySnapshotRef.current) {
+      currentHistorySnapshotRef.current = serializedSnapshot;
+      return;
+    }
+
+    if (serializedSnapshot === currentHistorySnapshotRef.current) {
+      return;
+    }
+
+    if (isApplyingHistoryRef.current) {
+      isApplyingHistoryRef.current = false;
+      currentHistorySnapshotRef.current = serializedSnapshot;
+      pendingHistoryBaseRef.current = null;
+      pendingHistoryNextRef.current = null;
+      return;
+    }
+
+    if (pendingHistoryBaseRef.current === null) {
+      pendingHistoryBaseRef.current = currentHistorySnapshotRef.current;
+    }
+    pendingHistoryNextRef.current = serializedSnapshot;
+    currentHistorySnapshotRef.current = serializedSnapshot;
+
+    if (historyCommitTimeoutRef.current !== null) {
+      window.clearTimeout(historyCommitTimeoutRef.current);
+    }
+
+    historyCommitTimeoutRef.current = window.setTimeout(() => {
+      flushPendingHistoryEntry();
+    }, HISTORY_GROUP_DELAY_MS);
+  }, [nodes, edges, isLayoutReady, flushPendingHistoryEntry]);
 
   // Theme Toggle Effect
   useEffect(() => {
@@ -198,7 +454,14 @@ const DCIMCanvas = () => {
   // Handle Spacebar listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return;
+        const isTyping = isTextEditingTarget(e.target);
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+            if (isTyping) return;
+            e.preventDefault();
+            handleUndo();
+            return;
+        }
+        if (isTyping) return;
         if (e.code === 'Space' && !e.repeat) setIsSpacePressed(true);
     };
 
@@ -208,16 +471,17 @@ const DCIMCanvas = () => {
     
     const handleBlur = () => setIsSpacePressed(false);
 
-    window.addEventListener('keydown', handleKeyDown);
+    // Capture phase avoids missing shortcuts when inner components stop propagation.
+    window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('blur', handleBlur);
 
     return () => {
-        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keydown', handleKeyDown, true);
         window.removeEventListener('keyup', handleKeyUp);
         window.removeEventListener('blur', handleBlur);
     };
-  }, []);
+  }, [handleUndo]);
 
   // Highlight Type logic
   useEffect(() => {
@@ -368,9 +632,17 @@ const DCIMCanvas = () => {
       event.preventDefault();
       event.stopPropagation();
       setSelectedEdge(edge);
-      setSelectedNode(null);
+      setSelectedNode((prevNode) => {
+        if (prevNode && (prevNode.id === edge.source || prevNode.id === edge.target)) {
+          return prevNode;
+        }
+        const sourceNode = nodes.find((n) => n.id === edge.source) || null;
+        const targetNode = nodes.find((n) => n.id === edge.target) || null;
+        return sourceNode || targetNode || prevNode || null;
+      });
+      setIsEditingNode(false);
       setMenu(null);
-  }, []);
+  }, [nodes]);
 
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
@@ -481,6 +753,13 @@ const DCIMCanvas = () => {
           xOffset = width / 2;
           yOffset = height / 2;
           zIndex = Z_INDEX_DEVICE;
+      } else if (dragData.type === ItemType.TOWER_SERVER) {
+          const towerUHeight = dragData.uHeight || DEFAULT_TOWER_SERVER_U;
+          width = TOWER_SERVER_WIDTH_PX;
+          height = towerUHeight * PX_PER_U;
+          xOffset = width / 2;
+          yOffset = height / 2;
+          zIndex = Z_INDEX_DEVICE;
       } else if (dragData.type === ItemType.SOFTWARE) {
           width = 200;
           height = 80;
@@ -513,7 +792,7 @@ const DCIMCanvas = () => {
         data: {
             label: dragData.label,
             totalU: dragData.totalU,
-            uHeight: dragData.uHeight,
+            uHeight: dragData.uHeight ?? (dragData.type === ItemType.TOWER_SERVER ? DEFAULT_TOWER_SERVER_U : undefined),
             type: dragData.type,
             status: 'active',
             description: dragData.type === ItemType.ZONE ? '拖拽调整大小...' : undefined,
@@ -559,8 +838,9 @@ const DCIMCanvas = () => {
       const absPos = getAbsolutePosition(node, currentNodes);
       
       const isUdf = node.type === ItemType.UDF;
+      const isTowerServer = node.type === ItemType.TOWER_SERVER;
       const nodeHeight = isUdf ? UDF_HEIGHT_PX : (node.height || (node.data?.uHeight || 1) * PX_PER_U);
-      const nodeWidth = isUdf ? UDF_WIDTH_PX : (node.width || SERVER_WIDTH_PX);
+      const nodeWidth = isUdf ? UDF_WIDTH_PX : (node.width || (isTowerServer ? TOWER_SERVER_WIDTH_PX : SERVER_WIDTH_PX));
       
       const nodeRect = {
           x: absPos.x,
@@ -630,14 +910,15 @@ const DCIMCanvas = () => {
 
       if (hoveredRack) {
           const rackAbs = getAbsolutePosition(hoveredRack, currentNodes);
-          const nodeCenterY = absPos.y + nodeHeight / 2;
-          const relY = nodeCenterY - rackAbs.y - RACK_HEADER_HEIGHT_PX;
-          const rackInnerHeight = hoveredRack.data.totalU * PX_PER_U;
+          const relY = absPos.y - rackAbs.y;
           const relativeYInRackArea = relY - RACK_PADDING_PX;
 
-          const uPositionFromBottom = Math.round((rackInnerHeight - relativeYInRackArea) / PX_PER_U);
-          const maxU = hoveredRack.data.totalU - previewUHeight;
-          previewUPosition = Math.max(0, Math.min(maxU, uPositionFromBottom));
+          const maxIndexFromTop = hoveredRack.data.totalU - previewUHeight;
+          const snappedIndexFromTop = Math.round(relativeYInRackArea / PX_PER_U);
+          const clampedIndexFromTop = Math.max(0, Math.min(maxIndexFromTop, snappedIndexFromTop));
+
+          // RackNode expects previewUPosition counted from bottom (0 = bottom)
+          previewUPosition = maxIndexFromTop - clampedIndexFromTop;
       }
 
       setNodes((nds) => nds.map((n) => {
@@ -683,12 +964,24 @@ const DCIMCanvas = () => {
             const currentNode = clearedNodes.find(n => n.id === node.id);
             if (!currentNode) return clearedNodes;
 
+            // Guard: a simple click can still fire drag-stop in some browsers.
+            // If position/parent didn't change, keep the node where it is.
+            const startNode = dragStartNodeRef.current;
+            if (startNode && startNode.id === currentNode.id) {
+                const dx = Math.abs((startNode.position?.x ?? 0) - (currentNode.position?.x ?? 0));
+                const dy = Math.abs((startNode.position?.y ?? 0) - (currentNode.position?.y ?? 0));
+                if (dx < 1 && dy < 1 && startNode.parentId === currentNode.parentId) {
+                    return clearedNodes;
+                }
+            }
+
             const absPos = getAbsolutePosition(currentNode, clearedNodes);
             const absX = absPos.x;
             const absY = absPos.y;
 
             const isUdf = node.type === ItemType.UDF;
-            const nodeWidth = isUdf ? UDF_WIDTH_PX : (node.width || (currentNode.width) || SERVER_WIDTH_PX);
+            const isTowerServer = node.type === ItemType.TOWER_SERVER;
+            const nodeWidth = isUdf ? UDF_WIDTH_PX : (node.width || (currentNode.width) || (isTowerServer ? TOWER_SERVER_WIDTH_PX : SERVER_WIDTH_PX));
             const nodeHeight = isUdf ? UDF_HEIGHT_PX : (node.height || (currentNode.height) || 30);
             const nodeAbsRect = { x: absX, y: absY, width: nodeWidth, height: nodeHeight };
 
@@ -777,23 +1070,21 @@ const DCIMCanvas = () => {
 
                  if (targetRack) {
                      const rackAbs = getAbsolutePosition(targetRack, clearedNodes);
-                     const relX = RACK_PADDING_PX;
-                     const nodeHeight = currentNode.height || (currentNode.data.uHeight || 1) * PX_PER_U;
-                     const nodeCenterY = absY + nodeHeight / 2;
-                     const relY = nodeCenterY - rackAbs.y - RACK_HEADER_HEIGHT_PX;
-
-                     const rackInnerHeight = targetRack.data.totalU * PX_PER_U;
-                     const relativeYInRackArea = relY - RACK_PADDING_PX;
-
-                     const uPositionFromBottom = Math.round((rackInnerHeight - relativeYInRackArea) / PX_PER_U);
+                     const relY = absY - rackAbs.y;
                      const deviceUHeight = currentNode.data.uHeight || 1;
-                     const maxU = targetRack.data.totalU - deviceUHeight;
-                     const clampedU = Math.max(0, Math.min(maxU, uPositionFromBottom));
+                     const maxIndexFromTop = targetRack.data.totalU - deviceUHeight;
+                     const relativeYInRackArea = relY - RACK_PADDING_PX;
+                     const snappedIndexFromTop = Math.round(relativeYInRackArea / PX_PER_U);
+                     const clampedIndexFromTop = Math.max(0, Math.min(maxIndexFromTop, snappedIndexFromTop));
+                     const finalY = (clampedIndexFromTop * PX_PER_U) + RACK_PADDING_PX;
+                     let targetTowerColumn: number | null = null;
+                     let finalX = RACK_PADDING_PX;
+                     if (isTowerServer) {
+                         targetTowerColumn = getTowerColumnForRackDrop(absX, rackAbs.x);
+                         finalX = getTowerColumnX(targetTowerColumn);
+                     }
 
-                     const targetIndexFromTop = (targetRack.data.totalU - deviceUHeight) - clampedU;
-                     const finalY = (targetIndexFromTop * PX_PER_U) + RACK_PADDING_PX;
-
-                     const slotStart = clampedU;
+                     const slotStart = clampedIndexFromTop;
                      const slotEnd = slotStart + deviceUHeight - 1;
 
                      const hasSlotCollision = clearedNodes.some(n => {
@@ -801,10 +1092,16 @@ const DCIMCanvas = () => {
                          if (n.id === node.id) return false;
 
                          const nUHeight = n.data.uHeight || 1;
-                         const nIndexFromTop = Math.round((n.position.y - RACK_PADDING_PX) / PX_PER_U);
-                         const nUFromBottom = (targetRack.data.totalU - nUHeight) - nIndexFromTop;
-                         const nEndU = nUFromBottom + nUHeight - 1;
-                         return (slotStart <= nEndU && slotEnd >= nUFromBottom);
+                         const nStartU = Math.round((n.position.y - RACK_PADDING_PX) / PX_PER_U);
+                         const nEndU = nStartU + nUHeight - 1;
+                         const hasVerticalOverlap = slotStart <= nEndU && slotEnd >= nStartU;
+                         if (!hasVerticalOverlap) return false;
+
+                         if (!isTowerServer) return true;
+                         if (n.type !== ItemType.TOWER_SERVER) return true;
+
+                         const occupiedColumn = getTowerColumnFromRackChild(n);
+                         return occupiedColumn === targetTowerColumn;
                      });
 
                      if (hasSlotCollision) {
@@ -814,7 +1111,8 @@ const DCIMCanvas = () => {
                      return clearedNodes.map(n => n.id === node.id ? {
                          ...n,
                          parentId: targetRack.id,
-                         position: { x: relX, y: finalY },
+                         position: { x: finalX, y: finalY },
+                         style: isTowerServer ? { ...n.style, width: TOWER_SERVER_WIDTH_PX } : n.style,
                          zIndex: Z_INDEX_DEVICE
                      } : n);
                  }
@@ -854,7 +1152,12 @@ const DCIMCanvas = () => {
                     if (n.type === ItemType.RACK || n.type === ItemType.PLACEHOLDER || n.type === ItemType.ZONE) return false;
 
                     const nAbs = getAbsolutePosition(n, clearedNodes);
-                    const nRect = { x: nAbs.x, y: nAbs.y, width: n.width || SERVER_WIDTH_PX, height: n.height || 30 };
+                    const nRect = {
+                        x: nAbs.x,
+                        y: nAbs.y,
+                        width: n.width || (n.type === ItemType.TOWER_SERVER ? TOWER_SERVER_WIDTH_PX : SERVER_WIDTH_PX),
+                        height: n.height || 30
+                    };
                     return checkCollision(nodeAbsRect, nRect);
                 });
 
@@ -943,7 +1246,7 @@ const DCIMCanvas = () => {
       <div className="flex-1 h-full relative" ref={reactFlowWrapper}>
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={visibleEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -980,7 +1283,16 @@ const DCIMCanvas = () => {
             size={1} 
             color={isDark ? "#334155" : "#cbd5e1"} 
           />
-          <Controls />
+          <Controls>
+            <ControlButton
+              onClick={handleUndo}
+              title="撤销 (Ctrl+Z)"
+              aria-label="撤销 (Ctrl+Z)"
+              className="rf-undo-control"
+            >
+              <i className="fa-solid fa-rotate-left text-[12px] leading-none"></i>
+            </ControlButton>
+          </Controls>
           <MiniMap 
             nodeColor={nodeColor} 
             style={{ backgroundColor: isDark ? '#1e293b' : '#f8fafc' }} 

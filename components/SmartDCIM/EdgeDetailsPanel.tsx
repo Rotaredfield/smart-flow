@@ -60,6 +60,11 @@ const EdgeDetailsPanel: React.FC<EdgeDetailsPanelProps> = ({ edge, onClose }) =>
     );
   };
 
+  const handleDelete = () => {
+    setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+    onClose();
+  };
+
   return (
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-50 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-300 dark:border-slate-700 rounded-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
         <div className="bg-slate-100/80 dark:bg-slate-800/80 p-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
@@ -141,12 +146,18 @@ const EdgeDetailsPanel: React.FC<EdgeDetailsPanelProps> = ({ edge, onClose }) =>
                  </div>
              </div>
 
-             <div className="pt-2">
+             <div className="pt-2 grid grid-cols-2 gap-2">
                 <button 
                     onClick={handleSave}
                     className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-1.5 rounded text-xs font-bold transition-all shadow-lg"
                 >
                     <i className="fa-solid fa-check mr-1"></i> 更新连接信息 (Update)
+                </button>
+                <button
+                    onClick={handleDelete}
+                    className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white py-1.5 rounded text-xs font-bold transition-all shadow-lg"
+                >
+                    <i className="fa-solid fa-trash mr-1"></i> 删除连接 (Delete)
                 </button>
              </div>
         </div>

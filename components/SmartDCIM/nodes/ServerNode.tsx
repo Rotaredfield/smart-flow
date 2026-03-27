@@ -2,17 +2,21 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { ServerData, ItemType } from '../../SmartDCIM/types';
-import { PX_PER_U, SERVER_WIDTH_PX } from '../../SmartDCIM/constants';
+import { PX_PER_U, SERVER_WIDTH_PX, TOWER_SERVER_WIDTH_PX } from '../../SmartDCIM/constants';
 
 // 虚拟机节点尺寸配置 - 4U高度，宽度减半
 const VM_WIDTH_PX = 140;  // 虚拟机宽度（减半）
 const VM_HEIGHT_PX = 120; // 虚拟机高度（4U = 4 * 30px）
 
-const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
+const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected, width: measuredWidth }) => {
   const isVirtualMachine = data.type === ItemType.VIRTUAL_MACHINE;
+  const isTowerServer = data.type === ItemType.TOWER_SERVER;
   // 虚拟机使用固定的高窄尺寸，其他设备使用U高度计算
   const height = isVirtualMachine ? VM_HEIGHT_PX : data.uHeight * PX_PER_U;
-  const width = isVirtualMachine ? VM_WIDTH_PX : SERVER_WIDTH_PX;
+  const defaultWidth = isTowerServer ? TOWER_SERVER_WIDTH_PX : SERVER_WIDTH_PX;
+  const width = isVirtualMachine
+    ? VM_WIDTH_PX
+    : (typeof measuredWidth === 'number' && measuredWidth > 0 ? measuredWidth : defaultWidth);
   const isHighlighted = data.isMatchedType;
   const isSearchMatch = data.isSearchMatch;
   const isCurrentSearchMatch = data.isCurrentSearchMatch;
@@ -33,6 +37,7 @@ const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
       case ItemType.STORAGE: return 'fa-database text-cyan-600 dark:text-cyan-400';
       case ItemType.FIREWALL: return 'fa-shield-halved text-orange-500 dark:text-orange-400';
       case ItemType.VIRTUAL_MACHINE: return 'fa-cloud text-purple-500 dark:text-purple-400';
+      case ItemType.TOWER_SERVER: return 'fa-server text-emerald-500 dark:text-emerald-400';
       default: return 'fa-server text-emerald-600 dark:text-emerald-400';
     }
   };
@@ -52,6 +57,8 @@ const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
         return `${baseBorderClass} bg-gradient-to-r from-orange-950/90 to-slate-800 border-orange-500/50 hover:border-orange-400`;
       case ItemType.VIRTUAL_MACHINE:
         return `${baseBorderClass} bg-gradient-to-r from-purple-950/90 to-slate-800 border-purple-500/50 hover:border-purple-400`;
+      case ItemType.TOWER_SERVER:
+        return `${baseBorderClass} bg-gradient-to-r from-emerald-950/90 to-slate-800 border-emerald-500/50 hover:border-emerald-400`;
       default:
         return `${baseBorderClass} bg-gradient-to-r from-slate-800 to-slate-800 border-slate-600 hover:border-slate-500`;
     }
@@ -187,13 +194,14 @@ Model: ${data.model || 'N/A'}
   return (
     <div
       title={tooltipText}
-      className={`relative rounded flex items-center justify-between px-4 overflow-hidden
+      className={`relative rounded flex items-center justify-between overflow-hidden
         ${selected ? 'ring-2 ring-blue-400 z-50' : ''}
         ${isHighlighted ? 'ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-50 brightness-110' : ''}
         ${isSearchMatch ? 'ring-2 ring-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.5)] z-40' : ''}
         ${isCurrentSearchMatch ? 'ring-4 ring-pink-600 shadow-[0_0_25px_rgba(236,72,153,0.9)] z-50 scale-110' : ''}
         ${getStyleClasses()}
         ${getStatusBorderClass()}
+        ${isTowerServer ? 'px-2' : 'px-4'}
         transition-all duration-300 cursor-grab active:cursor-grabbing shadow-sm group
       `}
       style={{
@@ -208,48 +216,50 @@ Model: ${data.model || 'N/A'}
         </div>
 
         {/* Left: Indicators */}
-        <div className="flex items-center gap-3 z-10 w-3/4">
+        <div className={`z-10 min-w-0 ${isTowerServer ? 'flex items-center gap-2 flex-1' : 'flex items-center gap-3 w-3/4'}`}>
             <div className="flex flex-col gap-1 shrink-0">
                 <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(data.status)}`}></div>
             </div>
-            <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>
+            {!isTowerServer && <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>}
             
             {/* Device Icon */}
-            <div className="w-6 flex justify-center shrink-0">
+            <div className={`${isTowerServer ? 'w-5' : 'w-6'} flex items-center justify-center shrink-0`}>
                  <i className={`fa-solid ${getDeviceIcon()} text-sm`}></i>
             </div>
 
-            <div className="flex flex-col min-w-0">
-                <span className="text-sm font-bold text-slate-100 leading-tight truncate max-w-[220px]" title={data.label}>
+            <div className="flex flex-col min-w-0 flex-1">
+                <span
+                  className={`${isTowerServer ? 'text-[11px]' : 'text-sm'} font-bold text-slate-100 leading-tight truncate`}
+                  title={data.label}
+                >
                     {data.label}
                 </span>
-                <div className="flex items-center gap-2 mt-0.5">
-                     <span className="text-xs text-slate-400 font-mono leading-tight truncate max-w-[140px]">
-                        {data.model || 'GENERIC'}
+                <div className={`flex items-center mt-0.5 ${isTowerServer ? 'gap-1' : 'gap-2'}`}>
+                    <span
+                      className={`${isTowerServer ? 'text-[9px] px-1 py-0' : 'text-[10px] px-1.5'} font-mono rounded border truncate ${
+                        data.ip
+                          ? 'text-blue-300 bg-blue-900/40 border-blue-700/30'
+                          : 'text-slate-400 bg-slate-900/40 border-slate-700/30'
+                      }`}
+                      title={data.ip || '填写IP地址'}
+                    >
+                      {data.ip || '填写IP地址'}
                     </span>
-                    {data.assetId && (
-                        <span className="text-[10px] text-yellow-300 font-mono bg-yellow-900/40 px-1.5 rounded border border-yellow-700/30 shrink-0">
-                            {data.assetId}
-                        </span>
-                    )}
-                    {data.ip && (
-                        <span className="text-[10px] text-blue-300 font-mono bg-blue-900/40 px-1.5 rounded shrink-0">
-                            {data.ip}
-                        </span>
-                    )}
                 </div>
             </div>
         </div>
 
         {/* Right: Ports/Label */}
-        <div className="flex items-center gap-3 z-10">
+        <div className={`flex items-center z-10 ${isTowerServer ? 'gap-1 ml-1' : 'gap-3'}`}>
              {/* Fake Ports - vary color by type */}
+            {!isTowerServer && (
             <div className="flex gap-1 opacity-50">
                  <div className="w-2.5 h-2.5 bg-black/40 border border-white/20 rounded-[1px]"></div>
                  <div className="w-2.5 h-2.5 bg-black/40 border border-white/20 rounded-[1px]"></div>
             </div>
+            )}
             <div className="bg-black/20 px-1.5 py-0.5 rounded border border-white/10 shrink-0">
-                <span className="text-xs text-slate-300 font-mono font-bold">{data.uHeight}U</span>
+                <span className={`${isTowerServer ? 'text-[10px]' : 'text-xs'} text-slate-300 font-mono font-bold`}>{data.uHeight}U</span>
             </div>
         </div>
 

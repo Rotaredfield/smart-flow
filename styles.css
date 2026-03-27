@@ -84,6 +84,10 @@ html:not(.dark) input:-webkit-autofill {
   fill: currentColor !important;
 }
 
+.react-flow__controls-button.rf-undo-control {
+  order: -1;
+}
+
 /* React Flow Handle Styles - Connection Points - High Specificity to Override Default */
 .react-flow__handle.react-flow__handle {
   position: absolute !important;

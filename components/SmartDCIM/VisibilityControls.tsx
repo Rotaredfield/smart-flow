@@ -14,7 +14,7 @@ const CATEGORIES = [
   { 
     id: 'server', 
     label: '计算设施 (Servers)', 
-    types: [ItemType.SERVER], 
+    types: [ItemType.SERVER, ItemType.TOWER_SERVER, ItemType.VIRTUAL_MACHINE], 
     icon: 'fa-server text-emerald-500 dark:text-emerald-400' 
   },
   { 

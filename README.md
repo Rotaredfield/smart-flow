@@ -38,14 +38,57 @@
 
 - Node.js >= 18
 - pnpm >= 8
+- npm >= 9（用于后端持久化服务）
+- Docker + Docker Compose（容器化部署时）
 
 ### 安装依赖
 
 ```bash
 pnpm install
+cd backend && npm install
 ```
 
 ### 开发模式
+
+```bash
+# 终端1：启动后端持久化服务（3001）
+cd backend && npm start
+
+# 终端2：启动前端（1919）
+pnpm run dev
+```
+
+访问地址：
+
+```bash
+http://localhost:1919
+```
+
+### 容器化启动（推荐）
+
+```bash
+docker compose up -d --build
+```
+
+前端端口固定为：
+
+```bash
+http://localhost:1919
+```
+
+停止容器：
+
+```bash
+docker compose down
+```
+
+清理并删除持久化数据卷：
+
+```bash
+docker compose down -v
+```
+
+### 仅前端开发（不连接持久化后端）
 
 ```bash
 pnpm run dev
@@ -67,11 +110,14 @@ pnpm run preview
 
 ```
 smart-flow/
+├── backend/               # 持久化服务（Express）
+│   ├── index.js           # API 入口
+│   └── package.json
 ├── components/
 │   ├── SmartDCIM/          # DCIM 核心组件
 │   │   ├── edges/          # 自定义边组件
 │   │   ├── nodes/          # 自定义节点组件
-│   │   └── services/       # 服务层
+│   │   └── services/       # 前端服务层（Gemini + 持久化 API）
 │   ├── edges/              # 边组件
 │   ├── nodes/              # 节点组件
 │   ├── ContextMenu.tsx     # 右键菜单
@@ -80,8 +126,11 @@ smart-flow/
 │   ├── NodeDetailsPanel.tsx # 节点详情面板
 │   ├── Sidebar.tsx         # 侧边栏
 │   └── VisibilityControls.tsx # 可见性控制
-├── services/
-│   └── geminiService.ts    # Gemini AI 服务
+├── docker/
+│   └── nginx/default.conf  # 前端反向代理配置
+├── docker-compose.yml      # 前后端容器编排（前端 1919）
+├── Dockerfile.frontend     # 前端镜像构建
+├── Dockerfile.backend      # 后端镜像构建
 ├── App.tsx                 # 主应用组件
 ├── types.ts                # 类型定义
 ├── constants.ts            # 常量定义
@@ -145,6 +194,24 @@ smart-flow/
 VITE_GEMINI_API_KEY=your_api_key_here
 ```
 
+### 持久化相关配置
+
+前端可选变量（默认即可）：
+
+```
+VITE_API_BASE=/api
+VITE_API_PROXY_TARGET=http://localhost:3001
+```
+
+后端可选变量：
+
+```
+PORT=3001
+HOST=0.0.0.0
+DATA_FILE=/data/dcim-layout.json
+DEFAULT_VIEW_ID=default
+```
+
 ## 📝 开发指南
 
 ### 添加新的节点类型
@@ -169,4 +236,3 @@ MIT
 ## 📮 联系方式
 
 如有问题或建议，请通过 Issue 联系我们。
-

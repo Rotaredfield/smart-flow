@@ -4,6 +4,7 @@ export enum ItemType {
   RACK = 'rack',
   PLACEHOLDER = 'placeholder',
   SERVER = 'server',
+  TOWER_SERVER = 'tower_server',
   NETWORK = 'network',
   STORAGE = 'storage',
   FIREWALL = 'firewall',

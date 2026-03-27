@@ -161,6 +161,19 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <i className="fa-solid fa-grip-lines text-slate-400 dark:text-slate-600"></i>
                 </div>
             ))}
+            <div
+                className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border border-emerald-200 dark:border-emerald-800/50 p-2 rounded cursor-grab active:cursor-grabbing hover:border-emerald-400 dark:hover:border-emerald-500 transition-all flex items-center gap-3"
+                draggable
+                onDragStart={(e) => onDragStart(e, { type: ItemType.TOWER_SERVER, uHeight: 14, label: '14U 塔式服务器' })}
+            >
+                <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-500/50 rounded flex items-center justify-center h-6 w-6">
+                    <i className="fa-solid fa-server text-[10px] text-emerald-600 dark:text-emerald-400"></i>
+                </div>
+                <div className="flex-1">
+                    <div className="font-medium text-sm text-slate-700 dark:text-slate-200">14U 塔式服务器</div>
+                    <div className="text-[10px] text-slate-500">机架内双列摆放</div>
+                </div>
+            </div>
             {/* 虚拟机 */}
             <div
                 className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border border-dashed border-purple-300 dark:border-purple-700/50 p-2 rounded cursor-grab active:cursor-grabbing hover:border-purple-400 dark:hover:border-purple-500 transition-all flex items-center gap-3"
@@ -357,20 +370,23 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 space-y-3 relative z-10 shadow-sm">
                 <div className="grid grid-cols-3 gap-1 rounded bg-slate-100 dark:bg-slate-900 p-1">
                     <button 
+                        type="button"
                         onClick={() => setCustomType(ItemType.SERVER)}
-                        className={`text-[10px] py-1 rounded transition-colors ${customType === ItemType.SERVER ? 'bg-emerald-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+                        className={`h-6 text-[10px] rounded transition-colors flex items-center justify-center leading-none ${customType === ItemType.SERVER ? 'bg-emerald-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
                         title="服务器"
-                    ><i className="fa-solid fa-server"></i></button>
+                    ><i className="fa-solid fa-server leading-none pointer-events-none"></i></button>
                     <button 
+                        type="button"
                         onClick={() => setCustomType(ItemType.NETWORK)}
-                        className={`text-[10px] py-1 rounded transition-colors ${customType === ItemType.NETWORK ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+                        className={`h-6 text-[10px] rounded transition-colors flex items-center justify-center leading-none ${customType === ItemType.NETWORK ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
                         title="网络"
-                    ><i className="fa-solid fa-network-wired"></i></button>
+                    ><i className="fa-solid fa-network-wired leading-none pointer-events-none"></i></button>
                     <button 
+                        type="button"
                         onClick={() => setCustomType(ItemType.RACK)}
-                        className={`text-[10px] py-1 rounded transition-colors ${customType === ItemType.RACK ? 'bg-blue-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+                        className={`h-6 text-[10px] rounded transition-colors flex items-center justify-center leading-none ${customType === ItemType.RACK ? 'bg-blue-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
                         title="机柜"
-                    ><i className="fa-solid fa-box"></i></button>
+                    ><i className="fa-solid fa-box leading-none pointer-events-none"></i></button>
                 </div>
 
                 <div>

@@ -174,20 +174,23 @@ const Sidebar: React.FC = () => {
             <div className="bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 space-y-3 relative z-10 shadow-sm">
                 <div className="grid grid-cols-3 gap-1 rounded bg-slate-100 dark:bg-slate-900 p-1">
                     <button 
+                        type="button"
                         onClick={() => setCustomType(ItemType.SERVER)}
-                        className={`text-[10px] py-1 rounded transition-colors ${customType === ItemType.SERVER ? 'bg-emerald-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+                        className={`h-6 text-[10px] rounded transition-colors flex items-center justify-center leading-none ${customType === ItemType.SERVER ? 'bg-emerald-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
                         title="服务器"
-                    ><i className="fa-solid fa-server"></i></button>
+                    ><i className="fa-solid fa-server leading-none pointer-events-none"></i></button>
                     <button 
+                        type="button"
                         onClick={() => setCustomType(ItemType.NETWORK)}
-                        className={`text-[10px] py-1 rounded transition-colors ${customType === ItemType.NETWORK ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+                        className={`h-6 text-[10px] rounded transition-colors flex items-center justify-center leading-none ${customType === ItemType.NETWORK ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
                         title="网络"
-                    ><i className="fa-solid fa-network-wired"></i></button>
+                    ><i className="fa-solid fa-network-wired leading-none pointer-events-none"></i></button>
                     <button 
+                        type="button"
                         onClick={() => setCustomType(ItemType.RACK)}
-                        className={`text-[10px] py-1 rounded transition-colors ${customType === ItemType.RACK ? 'bg-blue-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+                        className={`h-6 text-[10px] rounded transition-colors flex items-center justify-center leading-none ${customType === ItemType.RACK ? 'bg-blue-600 text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
                         title="机柜"
-                    ><i className="fa-solid fa-box"></i></button>
+                    ><i className="fa-solid fa-box leading-none pointer-events-none"></i></button>
                 </div>
 
                 <div>

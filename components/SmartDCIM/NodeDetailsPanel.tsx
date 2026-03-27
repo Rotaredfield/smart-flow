@@ -92,6 +92,7 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
          case ItemType.NETWORK: return 'fa-network-wired text-indigo-500 dark:text-indigo-400';
          case ItemType.STORAGE: return 'fa-database text-cyan-500 dark:text-cyan-400';
          case ItemType.FIREWALL: return 'fa-shield-halved text-orange-500 dark:text-orange-400';
+         case ItemType.TOWER_SERVER: return 'fa-server text-emerald-500 dark:text-emerald-400';
          default: return 'fa-hard-drive text-emerald-500 dark:text-emerald-400';
      }
   };
@@ -107,6 +108,7 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
           case ItemType.NETWORK: return '网络设备 (Network)';
           case ItemType.STORAGE: return '存储设备 (Storage)';
           case ItemType.FIREWALL: return '安全设备 (Firewall)';
+          case ItemType.TOWER_SERVER: return '塔式服务器 (Tower Server)';
           default: return '服务器详情 (Server)';
       }
   };
@@ -123,6 +125,10 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
         </div>
       );
   };
+
+  const detailsBodyClass = isEditing
+    ? 'p-4 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto'
+    : 'p-4 space-y-4 max-h-[60vh] overflow-y-auto';
 
   return (
     <div className="absolute bottom-4 right-4 z-50 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-300 dark:border-slate-700 rounded-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
@@ -143,7 +149,7 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
         </div>
       </div>
 
-      <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+      <div className={detailsBodyClass}>
          {/* Common Info */}
          <div>
             <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">名称 / Label</label>
@@ -158,32 +164,6 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
             )}
          </div>
 
-         {/* Asset ID Field */}
-         {!isZone && (
-             <div>
-                <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">资产编号 / Asset ID</label>
-                {isEditing ? (
-                    <input 
-                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-xs text-slate-900 dark:text-white mt-1 focus:border-yellow-500 outline-none font-mono text-yellow-600 dark:text-yellow-500"
-                        value={formData.assetId || ''}
-                        placeholder="e.g. ASSET-001"
-                        onChange={(e) => handleInputChange('assetId', e.target.value)}
-                    />
-                ) : (
-                    <div className="text-slate-700 dark:text-slate-300 font-mono text-xs mt-1 flex items-center gap-2">
-                        <i className="fa-solid fa-barcode text-slate-400 dark:text-slate-500"></i>
-                        {formData.assetId ? (
-                            <span className="bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-200 dark:border-yellow-800/30">
-                                {formData.assetId}
-                            </span>
-                        ) : (
-                            <span className="text-slate-500 dark:text-slate-600 italic">Not Assigned</span>
-                        )}
-                    </div>
-                )}
-             </div>
-         )}
-         
          <div className="grid grid-cols-2 gap-3">
              <div className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded border border-slate-200 dark:border-slate-700/30">
                 <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">ID</label>

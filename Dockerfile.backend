@@ -1,0 +1,19 @@
+ARG DOCKERHUB_MIRROR=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io
+FROM ${DOCKERHUB_MIRROR}/library/node:20-alpine
+WORKDIR /app
+
+COPY backend/package*.json ./
+RUN npm install --omit=dev
+
+COPY backend/ ./
+
+ENV HOST=0.0.0.0
+ENV PORT=3001
+ENV DATA_FILE=/data/dcim-layout.json
+
+RUN mkdir -p /data
+VOLUME ["/data"]
+
+EXPOSE 3001
+
+CMD ["npm", "start"]

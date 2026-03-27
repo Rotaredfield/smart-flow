@@ -103,7 +103,7 @@ Model: ${data.model || 'N/A'}
             </div>
             <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>
 
-            <div className="w-6 flex justify-center shrink-0">
+            <div className="w-6 flex items-center justify-center shrink-0">
                  <i className={`fa-solid ${getDeviceIcon()} text-sm`}></i>
             </div>
 
@@ -112,19 +112,15 @@ Model: ${data.model || 'N/A'}
                     {data.label}
                 </span>
                 <div className="flex items-center gap-2 mt-0.5">
-                     <span className="text-xs text-slate-400 font-mono leading-tight truncate max-w-[140px]">
-                        {data.model || 'GENERIC'}
+                    <span
+                      className={`text-[10px] font-mono px-1.5 rounded border shrink-0 ${
+                        data.ip
+                          ? 'text-blue-300 bg-blue-900/40 border-blue-700/30'
+                          : 'text-slate-400 bg-slate-900/40 border-slate-700/30'
+                      }`}
+                    >
+                      {data.ip || '填写IP地址'}
                     </span>
-                    {data.assetId && (
-                        <span className="text-[10px] text-yellow-300 font-mono bg-yellow-900/40 px-1.5 rounded border border-yellow-700/30 shrink-0">
-                            {data.assetId}
-                        </span>
-                    )}
-                    {data.ip && (
-                        <span className="text-[10px] text-blue-300 font-mono bg-blue-900/40 px-1.5 rounded shrink-0">
-                            {data.ip}
-                        </span>
-                    )}
                 </div>
             </div>
         </div>
