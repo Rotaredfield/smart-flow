@@ -11,6 +11,7 @@ const VM_HEIGHT_PX = 120; // 虚拟机高度（4U = 4 * 30px）
 const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected, width: measuredWidth }) => {
   const isVirtualMachine = data.type === ItemType.VIRTUAL_MACHINE;
   const isTowerServer = data.type === ItemType.TOWER_SERVER;
+  const isCompactOneU = !isVirtualMachine && (data.uHeight || 1) <= 1;
   // 虚拟机使用固定的高窄尺寸，其他设备使用U高度计算
   const height = isVirtualMachine ? VM_HEIGHT_PX : data.uHeight * PX_PER_U;
   const defaultWidth = isTowerServer ? TOWER_SERVER_WIDTH_PX : SERVER_WIDTH_PX;
@@ -201,7 +202,7 @@ Model: ${data.model || 'N/A'}
         ${isCurrentSearchMatch ? 'ring-4 ring-pink-600 shadow-[0_0_25px_rgba(236,72,153,0.9)] z-50 scale-110' : ''}
         ${getStyleClasses()}
         ${getStatusBorderClass()}
-        ${isTowerServer ? 'px-2' : 'px-4'}
+        ${isTowerServer || isCompactOneU ? 'px-2' : 'px-4'}
         transition-all duration-300 cursor-grab active:cursor-grabbing shadow-sm group
       `}
       style={{
@@ -216,50 +217,79 @@ Model: ${data.model || 'N/A'}
         </div>
 
         {/* Left: Indicators */}
-        <div className={`z-10 min-w-0 ${isTowerServer ? 'flex items-center gap-2 flex-1' : 'flex items-center gap-3 w-3/4'}`}>
+        <div
+          className={`z-10 min-w-0 ${
+            isTowerServer
+              ? 'flex items-center gap-2 flex-1'
+              : isCompactOneU
+                ? 'flex items-center gap-1.5 flex-1'
+                : 'flex items-center gap-3 w-3/4'
+          }`}
+        >
             <div className="flex flex-col gap-1 shrink-0">
-                <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(data.status)}`}></div>
+                <div className={`${isCompactOneU ? 'w-2 h-2' : 'w-2.5 h-2.5'} rounded-full ${getStatusColor(data.status)}`}></div>
             </div>
-            {!isTowerServer && <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>}
+            {!isTowerServer && !isCompactOneU && <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>}
             
             {/* Device Icon */}
             <div className={`${isTowerServer ? 'w-5' : 'w-6'} flex items-center justify-center shrink-0`}>
-                 <i className={`fa-solid ${getDeviceIcon()} text-sm`}></i>
+                 <i className={`fa-solid ${getDeviceIcon()} ${isCompactOneU ? 'text-xs' : 'text-sm'}`}></i>
             </div>
 
-            <div className="flex flex-col min-w-0 flex-1">
+            {isCompactOneU ? (
+              <div className="flex items-center gap-1 min-w-0 flex-1">
                 <span
-                  className={`${isTowerServer ? 'text-[11px]' : 'text-sm'} font-bold text-slate-100 leading-tight truncate`}
+                  className="text-[10px] font-bold text-slate-100 leading-tight truncate flex-1"
                   title={data.label}
                 >
-                    {data.label}
+                  {data.label}
                 </span>
-                <div className={`flex items-center mt-0.5 ${isTowerServer ? 'gap-1' : 'gap-2'}`}>
-                    <span
-                      className={`${isTowerServer ? 'text-[9px] px-1 py-0' : 'text-[10px] px-1.5'} font-mono rounded border truncate ${
-                        data.ip
-                          ? 'text-blue-300 bg-blue-900/40 border-blue-700/30'
-                          : 'text-slate-400 bg-slate-900/40 border-slate-700/30'
-                      }`}
-                      title={data.ip || '填写IP地址'}
-                    >
-                      {data.ip || '填写IP地址'}
-                    </span>
-                </div>
-            </div>
+                <span
+                  className={`text-[9px] px-1 py-0 font-mono rounded border truncate max-w-[50%] ${
+                    data.ip
+                      ? 'text-blue-300 bg-blue-900/40 border-blue-700/30'
+                      : 'text-slate-400 bg-slate-900/40 border-slate-700/30'
+                  }`}
+                  title={data.ip || '填写IP地址'}
+                >
+                  {data.ip || '填写IP地址'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col min-w-0 flex-1">
+                  <span
+                    className={`${isTowerServer ? 'text-[11px]' : 'text-sm'} font-bold text-slate-100 leading-tight truncate`}
+                    title={data.label}
+                  >
+                      {data.label}
+                  </span>
+                  <div className={`flex items-center mt-0.5 ${isTowerServer ? 'gap-1' : 'gap-2'}`}>
+                      <span
+                        className={`${isTowerServer ? 'text-[9px] px-1 py-0' : 'text-[10px] px-1.5'} font-mono rounded border truncate ${
+                          data.ip
+                            ? 'text-blue-300 bg-blue-900/40 border-blue-700/30'
+                            : 'text-slate-400 bg-slate-900/40 border-slate-700/30'
+                        }`}
+                        title={data.ip || '填写IP地址'}
+                      >
+                        {data.ip || '填写IP地址'}
+                      </span>
+                  </div>
+              </div>
+            )}
         </div>
 
         {/* Right: Ports/Label */}
-        <div className={`flex items-center z-10 ${isTowerServer ? 'gap-1 ml-1' : 'gap-3'}`}>
+        <div className={`flex items-center z-10 ${isTowerServer || isCompactOneU ? 'gap-1 ml-1' : 'gap-3'}`}>
              {/* Fake Ports - vary color by type */}
-            {!isTowerServer && (
+            {!isTowerServer && !isCompactOneU && (
             <div className="flex gap-1 opacity-50">
                  <div className="w-2.5 h-2.5 bg-black/40 border border-white/20 rounded-[1px]"></div>
                  <div className="w-2.5 h-2.5 bg-black/40 border border-white/20 rounded-[1px]"></div>
             </div>
             )}
             <div className="bg-black/20 px-1.5 py-0.5 rounded border border-white/10 shrink-0">
-                <span className={`${isTowerServer ? 'text-[10px]' : 'text-xs'} text-slate-300 font-mono font-bold`}>{data.uHeight}U</span>
+                <span className={`${isTowerServer || isCompactOneU ? 'text-[10px]' : 'text-xs'} text-slate-300 font-mono font-bold`}>{data.uHeight}U</span>
             </div>
         </div>
 

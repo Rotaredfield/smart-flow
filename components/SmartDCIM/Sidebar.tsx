@@ -164,13 +164,13 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div
                 className="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 border border-emerald-200 dark:border-emerald-800/50 p-2 rounded cursor-grab active:cursor-grabbing hover:border-emerald-400 dark:hover:border-emerald-500 transition-all flex items-center gap-3"
                 draggable
-                onDragStart={(e) => onDragStart(e, { type: ItemType.TOWER_SERVER, uHeight: 14, label: '14U 塔式服务器' })}
+                onDragStart={(e) => onDragStart(e, { type: ItemType.TOWER_SERVER, uHeight: 14, label: '塔式服务器' })}
             >
                 <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-500/50 rounded flex items-center justify-center h-6 w-6">
                     <i className="fa-solid fa-server text-[10px] text-emerald-600 dark:text-emerald-400"></i>
                 </div>
                 <div className="flex-1">
-                    <div className="font-medium text-sm text-slate-700 dark:text-slate-200">14U 塔式服务器</div>
+                    <div className="font-medium text-sm text-slate-700 dark:text-slate-200">塔式服务器</div>
                     <div className="text-[10px] text-slate-500">机架内双列摆放</div>
                 </div>
             </div>
