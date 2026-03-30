@@ -11,6 +11,7 @@ const SoftwareNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
   const isHighlighted = data.isMatchedType;
   const isSearchMatch = data.isSearchMatch;
   const isCurrentSearchMatch = data.isCurrentSearchMatch;
+  const effectiveStatus = data.runtimeStatus || data.status;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -53,7 +54,8 @@ const SoftwareNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
 端口: ${data.port || 'N/A'}
 技术栈: ${data.techStack || 'N/A'}
 联系人: ${data.contact || 'N/A'}
-状态: ${data.status}
+状态: ${effectiveStatus}
+Slurm状态: ${data.slurmState || 'N/A'}
   `.trim();
 
   // 连接点样式 - 扩大点击范围以提高选中便利性
@@ -63,7 +65,7 @@ const SoftwareNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
 
   // 获取状态边框样式
   const getStatusBorderClass = () => {
-    switch(data.status) {
+    switch(effectiveStatus) {
       case 'malfunction':
         return 'ring-2 ring-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]';
       case 'maintenance':
@@ -112,7 +114,7 @@ const SoftwareNode: React.FC<NodeProps<ServerData>> = ({ data, selected }) => {
           <span className="text-sm font-bold text-slate-800 dark:text-pink-100 leading-tight truncate" title={data.label}>
             {data.label}
           </span>
-          <div className={`w-2 h-2 rounded-full ${getStatusColor(data.status)}`}></div>
+          <div className={`w-2 h-2 rounded-full ${getStatusColor(effectiveStatus)}`}></div>
         </div>
         <div className="flex items-center gap-2">
           {data.version && (

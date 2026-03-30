@@ -2,6 +2,9 @@ ARG DOCKERHUB_MIRROR=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io
 FROM ${DOCKERHUB_MIRROR}/library/node:20-alpine
 WORKDIR /app
 
+RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.huaweicloud.com/alpine#g' /etc/apk/repositories \
+  && apk add --no-cache openssh
+
 COPY backend/package*.json ./
 RUN npm install --omit=dev
 

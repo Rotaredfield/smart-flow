@@ -10,8 +10,14 @@ services:
       PORT: 3001
       DATA_FILE: /data/dcim-layout.json
       DEFAULT_VIEW_ID: default
+      SLURM_SYNC_ENABLED: ${SLURM_SYNC_ENABLED:-true}
+      SLURM_NODE_STATUS_CMD: ssh root@192.168.102.128 'scontrol show nodes -o'
+      SLURM_REFRESH_MS: ${SLURM_REFRESH_MS:-15000}
+      SLURM_NODE_STATUS_TIMEOUT_MS: ${SLURM_NODE_STATUS_TIMEOUT_MS:-8000}
+      SLURM_MAINTENANCE_KEYWORD: ${SLURM_MAINTENANCE_KEYWORD:-维护}
     volumes:
       - dcim_layout_data:/data
+      - /root/.ssh:/root/.ssh:ro
     restart: unless-stopped
 
   frontend:

@@ -8,6 +8,7 @@ const UdfNode: React.FC<NodeProps<UdfData>> = ({ data, selected }) => {
   const isHighlighted = data.isMatchedType;
   const isSearchMatch = data.isSearchMatch;
   const isCurrentSearchMatch = data.isCurrentSearchMatch;
+  const effectiveStatus = data.runtimeStatus || data.status;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -20,7 +21,7 @@ const UdfNode: React.FC<NodeProps<UdfData>> = ({ data, selected }) => {
   };
 
   const getStatusBorderClass = () => {
-    switch(data.status) {
+    switch(effectiveStatus) {
       case 'malfunction':
         return 'ring-2 ring-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]';
       case 'maintenance':
@@ -36,7 +37,7 @@ Asset ID: ${data.assetId || 'N/A'}
 Type: UDF (光纤架/网口架)
 Fiber Ports: ${data.fiberPorts || 0}
 Network Ports: ${data.networkPorts || 0}
-Status: ${data.status}
+Status: ${effectiveStatus}
   `.trim();
 
   const handleStyle = "w-3 h-3 !bg-slate-300 dark:!bg-slate-400 !border-slate-400 dark:!border-slate-600 !border-2 hover:!bg-blue-500 hover:!border-blue-300 transition-all duration-200 hover:scale-[1.8] hover:shadow-[0_0_8px_rgba(59,130,246,0.8)] z-50";
@@ -65,7 +66,7 @@ Status: ${data.status}
 
       <div className="flex items-center gap-3 z-10 w-1/3">
         <div className="flex flex-col gap-1 shrink-0">
-          <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(data.status)}`}></div>
+          <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(effectiveStatus)}`}></div>
         </div>
         <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>
         

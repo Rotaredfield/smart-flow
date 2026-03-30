@@ -12,6 +12,7 @@ const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected, width: me
   const isVirtualMachine = data.type === ItemType.VIRTUAL_MACHINE;
   const isTowerServer = data.type === ItemType.TOWER_SERVER;
   const isCompactOneU = !isVirtualMachine && (data.uHeight || 1) <= 1;
+  const effectiveStatus = data.runtimeStatus || data.status;
   // 虚拟机使用固定的高窄尺寸，其他设备使用U高度计算
   const height = isVirtualMachine ? VM_HEIGHT_PX : data.uHeight * PX_PER_U;
   const defaultWidth = isTowerServer ? TOWER_SERVER_WIDTH_PX : SERVER_WIDTH_PX;
@@ -66,7 +67,7 @@ const ServerNode: React.FC<NodeProps<ServerData>> = ({ data, selected, width: me
   };
 
   const getStatusBorderClass = () => {
-    switch(data.status) {
+    switch(effectiveStatus) {
       case 'malfunction':
         return 'ring-2 ring-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]';
       case 'maintenance':
@@ -83,7 +84,7 @@ Asset ID: ${data.assetId || 'N/A'}
 Type: ${data.type}
 IP: ${data.ip || 'N/A'}
 Contact: ${data.contact || 'N/A'}
-Status: ${data.status}
+Status: ${effectiveStatus}
 Model: ${data.model || 'N/A'}
   `.trim();
 
@@ -112,7 +113,7 @@ Model: ${data.model || 'N/A'}
       >
           {/* 顶部：状态 + 图标 */}
           <div className="flex items-center gap-2 z-10">
-              <div className={`w-2 h-2 rounded-full ${getStatusColor(data.status)}`}></div>
+              <div className={`w-2 h-2 rounded-full ${getStatusColor(effectiveStatus)}`}></div>
               <div className="w-6 h-6 flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 rounded-full">
                    <i className={`fa-solid ${getDeviceIcon()} text-xs`}></i>
               </div>
@@ -227,7 +228,7 @@ Model: ${data.model || 'N/A'}
           }`}
         >
             <div className="flex flex-col gap-1 shrink-0">
-                <div className={`${isCompactOneU ? 'w-2 h-2' : 'w-2.5 h-2.5'} rounded-full ${getStatusColor(data.status)}`}></div>
+                <div className={`${isCompactOneU ? 'w-2 h-2' : 'w-2.5 h-2.5'} rounded-full ${getStatusColor(effectiveStatus)}`}></div>
             </div>
             {!isTowerServer && !isCompactOneU && <div className="h-full border-r border-white/10 mx-1 shrink-0"></div>}
             

@@ -201,6 +201,7 @@ VITE_GEMINI_API_KEY=your_api_key_here
 ```
 VITE_API_BASE=/api
 VITE_API_PROXY_TARGET=http://localhost:3001
+VITE_SLURM_REFRESH_MS=15000
 ```
 
 后端可选变量：
@@ -210,7 +211,21 @@ PORT=3001
 HOST=0.0.0.0
 DATA_FILE=/data/dcim-layout.json
 DEFAULT_VIEW_ID=default
+SLURM_SYNC_ENABLED=true
+SLURM_NODE_STATUS_CMD=scontrol show nodes -o
+SLURM_REFRESH_MS=15000
+SLURM_NODE_STATUS_TIMEOUT_MS=8000
+SLURM_MAINTENANCE_KEYWORD=维护
 ```
+
+Slurm 状态映射规则：
+
+- 节点状态包含 `DRAIN` 且 `Reason` 包含“维护” => 页面状态显示为 `维护中`
+- 其他非正常 Slurm 状态（如 `DOWN`、`FAIL`、`DRAIN` 等）=> 页面状态显示为 `发生故障`
+
+如果通过 SSH 访问 Slurm 控制节点，请确保后端容器可用密钥登录（例如将宿主机 `/root/.ssh` 挂载到容器），并将 `SLURM_NODE_STATUS_CMD` 配置为：
+
+`ssh <user>@<slurmctld-ip> 'scontrol show nodes -o'`
 
 ## 📝 开发指南
 

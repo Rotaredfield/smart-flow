@@ -43,6 +43,11 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
   const isUdf = node.type === ItemType.UDF;
   
   const data = node.data;
+  const runtimeStatus = (data as Partial<ServerData & UdfData>).runtimeStatus;
+  const runtimeStatusReason = (data as Partial<ServerData & UdfData>).runtimeStatusReason;
+  const runtimeStatusSource = (data as Partial<ServerData & UdfData>).runtimeStatusSource;
+  const slurmState = (data as Partial<ServerData & UdfData>).slurmState;
+  const effectiveStatus = runtimeStatus || (data as Partial<ServerData & UdfData>).status || 'active';
 
   const handleSave = () => {
     setNodes((nds) => 
@@ -494,25 +499,43 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ node, onClose, isEd
                 <div>
                    <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">运行状态 / Status</label>
                    {isEditing ? (
-                       <div className="grid grid-cols-2 gap-2 mt-2">
-                           {STATUS_OPTIONS.map((opt) => (
-                               <button
-                                   key={opt.value}
-                                   onClick={() => handleInputChange('status', opt.value)}
-                                   className={`
-                                       flex items-center gap-2 p-2 rounded border transition-all text-xs
-                                       ${formData.status === opt.value
-                                           ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 ring-1 ring-blue-500 text-blue-700 dark:text-blue-100'
-                                           : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}
-                                   `}
-                               >
-                                   <div className={`w-2 h-2 rounded-full ${opt.color} flex-shrink-0`}></div>
-                                   <span className="truncate">{opt.label.split('(')[0]}</span>
-                               </button>
-                           ))}
+                       <div className="mt-2 space-y-2">
+                           {runtimeStatusSource === 'slurm' && (
+                               <div className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 rounded px-2 py-1">
+                                   Slurm 同步中，展示状态以 Slurm 为准
+                                   {slurmState ? `（${slurmState}）` : ''}
+                                   {runtimeStatusReason ? `：${runtimeStatusReason}` : ''}
+                               </div>
+                           )}
+                           <div className="grid grid-cols-2 gap-2">
+                               {STATUS_OPTIONS.map((opt) => (
+                                   <button
+                                       key={opt.value}
+                                       onClick={() => handleInputChange('status', opt.value)}
+                                       className={`
+                                           flex items-center gap-2 p-2 rounded border transition-all text-xs
+                                           ${formData.status === opt.value
+                                               ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 ring-1 ring-blue-500 text-blue-700 dark:text-blue-100'
+                                               : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}
+                                       `}
+                                   >
+                                       <div className={`w-2 h-2 rounded-full ${opt.color} flex-shrink-0`}></div>
+                                       <span className="truncate">{opt.label.split('(')[0]}</span>
+                                   </button>
+                               ))}
+                           </div>
                        </div>
                    ) : (
-                       renderStatusDisplay((data as ServerData | UdfData).status)
+                       <div className="space-y-2">
+                           {renderStatusDisplay(effectiveStatus)}
+                           {runtimeStatusSource === 'slurm' && (
+                               <div className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/50 rounded px-2 py-1">
+                                   来源: Slurm
+                                   {slurmState ? ` | State=${slurmState}` : ''}
+                                   {runtimeStatusReason ? ` | Reason=${runtimeStatusReason}` : ''}
+                               </div>
+                           )}
+                       </div>
                    )}
                 </div>
              </div>

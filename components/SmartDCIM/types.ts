@@ -40,6 +40,11 @@ export interface ServerData {
   uHeight: number;
   type: ItemType;
   status: 'active' | 'maintenance' | 'offline' | 'malfunction';
+  runtimeStatus?: 'active' | 'maintenance' | 'offline' | 'malfunction';
+  runtimeStatusReason?: string;
+  runtimeStatusSource?: 'slurm';
+  slurmNodeName?: string;
+  slurmState?: string;
   model?: string;
   ip?: string;
   assetId?: string;
@@ -60,6 +65,11 @@ export interface UdfData {
   fiberPorts: number;
   networkPorts: number;
   status: 'active' | 'maintenance' | 'offline' | 'malfunction';
+  runtimeStatus?: 'active' | 'maintenance' | 'offline' | 'malfunction';
+  runtimeStatusReason?: string;
+  runtimeStatusSource?: 'slurm';
+  slurmNodeName?: string;
+  slurmState?: string;
   model?: string;
   assetId?: string;
   description?: string;

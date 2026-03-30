@@ -36,6 +36,7 @@ import VisibilityControls from './VisibilityControls';
 import { DragItem, ItemType, ServerData } from './types';
 import { PX_PER_U, RACK_PADDING_PX, RACK_WIDTH_PX, SERVER_WIDTH_PX, RACK_TWO_COLUMN_GAP_PX, TOWER_SERVER_WIDTH_PX, RACK_HEADER_HEIGHT_PX, UDF_WIDTH_PX, UDF_HEIGHT_PX, DEFAULT_FIBER_PORTS, DEFAULT_NETWORK_PORTS, DEFAULT_TOWER_SERVER_U } from './constants';
 import { DEFAULT_VIEW_ID, loadLayout, saveLayout } from './services/layoutPersistenceService';
+import { loadSlurmStatuses, SlurmNodeStatus } from './services/slurmStatusService';
 
 // --- Error Suppression Logic (Moved from root index.tsx) ---
 const resizeErrorMessages = [
@@ -90,13 +91,20 @@ const Z_INDEX_DEVICE = 1000;
 const AUTOSAVE_DELAY_MS = 700;
 const HISTORY_LIMIT = 100;
 const HISTORY_GROUP_DELAY_MS = 250;
+const SLURM_SYNC_INTERVAL_MS = Math.max(5000, Number(import.meta.env.VITE_SLURM_REFRESH_MS || 15000));
+const SLURM_SYNC_NODE_TYPES = new Set([ItemType.SERVER, ItemType.TOWER_SERVER]);
 const TRANSIENT_NODE_DATA_FIELDS = [
   'isMatchedType',
   'isDropTarget',
   'previewUPosition',
   'previewUHeight',
   'isSearchMatch',
-  'isCurrentSearchMatch'
+  'isCurrentSearchMatch',
+  'runtimeStatus',
+  'runtimeStatusReason',
+  'runtimeStatusSource',
+  'slurmNodeName',
+  'slurmState'
 ];
 
 let id = 0;
@@ -186,6 +194,70 @@ const isTextEditingTarget = (target: EventTarget | null) => {
   }
   if (target.isContentEditable) return true;
   return Boolean(target.closest('[contenteditable="true"]'));
+};
+
+const normalizeLookupKey = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const sanitizeNodeIdForLookup = (id: string) => {
+  const normalized = normalizeLookupKey(id);
+  if (!normalized) return null;
+  if (normalized.startsWith('dnd_')) return null;
+  return normalized;
+};
+
+const collectNodeLookupKeys = (node: Node): string[] => {
+  const data = (node.data || {}) as Partial<ServerData>;
+  const ipKey = normalizeLookupKey(data.ip);
+  if (ipKey) {
+    // Prefer strict IP binding whenever IP exists to avoid accidental fallback mismatches.
+    return [ipKey];
+  }
+
+  const keys = new Set<string>();
+
+  const maybePush = (value: unknown) => {
+    const key = normalizeLookupKey(value);
+    if (key) keys.add(key);
+  };
+
+  maybePush(data.slurmNodeName);
+  maybePush(data.label);
+  const normalizedNodeId = sanitizeNodeIdForLookup(node.id);
+  if (normalizedNodeId) keys.add(normalizedNodeId);
+
+  return Array.from(keys);
+};
+
+const buildSlurmStatusLookup = (statuses: SlurmNodeStatus[]) => {
+  const lookup = new Map<string, SlurmNodeStatus>();
+
+  statuses.forEach((item) => {
+    const candidateKeys = Array.isArray(item.keys) ? item.keys : [item.nodeName, item.nodeAddr];
+    candidateKeys
+      .map((key) => normalizeLookupKey(key))
+      .filter((key): key is string => Boolean(key))
+      .forEach((key) => {
+        if (!lookup.has(key)) {
+          lookup.set(key, item);
+        }
+      });
+  });
+
+  return lookup;
+};
+
+const stripRuntimeStatusFields = (nodeData: Record<string, unknown>) => {
+  const nextData = { ...nodeData };
+  delete nextData.runtimeStatus;
+  delete nextData.runtimeStatusReason;
+  delete nextData.runtimeStatusSource;
+  delete nextData.slurmNodeName;
+  delete nextData.slurmState;
+  return nextData;
 };
 
 const DCIMCanvas = () => {
@@ -320,6 +392,76 @@ const DCIMCanvas = () => {
     }
   }, [flushPendingHistoryEntry, isLayoutReady, setEdges, setNodes]);
 
+  const applySlurmRuntimeStatuses = useCallback(
+    (statuses: SlurmNodeStatus[]) => {
+      const statusLookup = buildSlurmStatusLookup(statuses);
+
+      setNodes((nds) => {
+        let hasChanges = false;
+        const nextNodes = nds.map((node) => {
+          if (!node.data || typeof node.data !== 'object' || Array.isArray(node.data)) {
+            return node;
+          }
+
+          const currentData = node.data as Record<string, unknown>;
+          const hasRuntimeStatus =
+            'runtimeStatus' in currentData ||
+            'runtimeStatusReason' in currentData ||
+            'runtimeStatusSource' in currentData ||
+            'slurmNodeName' in currentData ||
+            'slurmState' in currentData;
+
+          if (!SLURM_SYNC_NODE_TYPES.has(node.type as ItemType)) {
+            if (!hasRuntimeStatus) return node;
+            hasChanges = true;
+            return { ...node, data: stripRuntimeStatusFields(currentData) };
+          }
+
+          const matchedStatus = collectNodeLookupKeys(node)
+            .map((key) => statusLookup.get(key))
+            .find((value): value is SlurmNodeStatus => Boolean(value));
+
+          if (!matchedStatus) {
+            if (!hasRuntimeStatus) return node;
+            hasChanges = true;
+            return { ...node, data: stripRuntimeStatusFields(currentData) };
+          }
+
+          const nextRuntimeStatus = matchedStatus.status;
+          const nextReason = matchedStatus.reason || '';
+          const nextSlurmState = matchedStatus.state || '';
+          const nextNodeName = matchedStatus.nodeName || '';
+
+          if (
+            currentData.runtimeStatus === nextRuntimeStatus &&
+            currentData.runtimeStatusReason === nextReason &&
+            currentData.runtimeStatusSource === 'slurm' &&
+            currentData.slurmNodeName === nextNodeName &&
+            currentData.slurmState === nextSlurmState
+          ) {
+            return node;
+          }
+
+          hasChanges = true;
+          return {
+            ...node,
+            data: {
+              ...currentData,
+              runtimeStatus: nextRuntimeStatus,
+              runtimeStatusReason: nextReason,
+              runtimeStatusSource: 'slurm',
+              slurmNodeName: nextNodeName,
+              slurmState: nextSlurmState,
+            },
+          };
+        });
+
+        return hasChanges ? nextNodes : nds;
+      });
+    },
+    [setNodes]
+  );
+
   // Load persisted layout once on boot.
   useEffect(() => {
     let isCancelled = false;
@@ -364,6 +506,38 @@ const DCIMCanvas = () => {
       }
     };
   }, [setEdges, setNodes]);
+
+  useEffect(() => {
+    if (!isLayoutReady) return;
+    let isCancelled = false;
+    let intervalId: number | null = null;
+
+    const syncSlurmStatuses = async () => {
+      try {
+        const slurmPayload = await loadSlurmStatuses();
+        if (isCancelled) return;
+
+        if (slurmPayload.enabled === false) {
+          applySlurmRuntimeStatuses([]);
+          return;
+        }
+
+        applySlurmRuntimeStatuses(slurmPayload.statuses);
+      } catch (error) {
+        console.error('Failed to sync Slurm statuses:', error);
+      }
+    };
+
+    syncSlurmStatuses();
+    intervalId = window.setInterval(syncSlurmStatuses, SLURM_SYNC_INTERVAL_MS);
+
+    return () => {
+      isCancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [applySlurmRuntimeStatuses, isLayoutReady]);
 
   // Keep layout in persistent storage whenever nodes/edges change.
   useEffect(() => {
